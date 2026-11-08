@@ -46,11 +46,8 @@ public class UIGameManager : MonoBehaviour
     [SerializeField] private Button pauseMusicButton;
     [SerializeField] private Button pauseSfxButton;
 
-    [Header("Rewarded Ads")]
-    [SerializeField] private Button continueAdButton;
-    [SerializeField] private Button doubleCoinsButton;
+    [Header("Dead Panel")]
     [SerializeField] private TMP_Text coinsThisRunText;
-    [SerializeField] private GameObject platformPrefab;
 
     [Header("Score Display")]
     [SerializeField] private TMP_Text hudScoreText;
@@ -74,8 +71,6 @@ public class UIGameManager : MonoBehaviour
     private static TMP_FontAsset cachedFontAsset;
 
     private int coinsThisRun = 0;
-    private bool reviveUsedThisRun = false;
-    private bool coinsDoubledThisRun = false;
     private PlayerMovement cachedPlayer;
     private bool isPaused = false;
     private bool isGameOver = false;
@@ -85,8 +80,6 @@ public class UIGameManager : MonoBehaviour
     private void Start()
     {
         coinsThisRun = 0;
-        reviveUsedThisRun = false;
-        coinsDoubledThisRun = false;
         isPaused = false;
         isGameOver = false;
 
@@ -132,14 +125,6 @@ public class UIGameManager : MonoBehaviour
             UpdatePauseSfxVisual(AudioManager.instance.IsSfxMuted);
         }
 
-        if (continueAdButton != null)
-        {
-            continueAdButton.onClick.AddListener(OnContinueAdClicked);
-        }
-        if (doubleCoinsButton != null)
-        {
-            doubleCoinsButton.onClick.AddListener(OnDoubleCoinsClicked);
-        }
 
         SetupTextStyles();
         UpdateNumber();
@@ -243,8 +228,6 @@ public class UIGameManager : MonoBehaviour
         }
 
         // Style all action buttons to match the cute, plump pastry "PLAY" button
-        StylePastryButton(continueAdButton, fontToUse);
-        StylePastryButton(doubleCoinsButton, fontToUse);
         StylePastryButton(RetryButton, fontToUse);
         StylePastryButton(MenuButton, fontToUse);
         StylePastryButton(resumeButton, fontToUse);
@@ -260,58 +243,19 @@ public class UIGameManager : MonoBehaviour
     /// </summary>
     private void FormatDeadPanelButtons()
     {
-        bool hasRevive = continueAdButton != null && continueAdButton.gameObject.activeSelf;
+        Button[] buttons = new Button[] { RetryButton, MenuButton };
+        float[] yPositions = new float[] { 50f, -125f };
 
-        if (hasRevive)
+        for (int i = 0; i < buttons.Length; i++)
         {
-            // 4 buttons visible with 175px center delta and 25px gap between 150px buttons
-            Button[] buttons = new Button[] { continueAdButton, doubleCoinsButton, RetryButton, MenuButton };
-            float[] yPositions = new float[] { 145f, -30f, -205f, -380f };
-
-            for (int i = 0; i < buttons.Length; i++)
+            if (buttons[i] == null) continue;
+            RectTransform rt = buttons[i].GetComponent<RectTransform>();
+            if (rt != null)
             {
-                if (buttons[i] == null) continue;
-                RectTransform rt = buttons[i].GetComponent<RectTransform>();
-                if (rt != null)
-                {
-                    rt.sizeDelta = new Vector2(280f, 150f);
-                    rt.anchoredPosition = new Vector2(0f, yPositions[i]);
-                }
+                rt.sizeDelta = new Vector2(280f, 150f);
+                rt.anchoredPosition = new Vector2(0f, yPositions[i]);
             }
         }
-        else
-        {
-            // 3 buttons visible (revive used): smoothly re-centered with the same 25px gap
-            Button[] buttons = new Button[] { doubleCoinsButton, RetryButton, MenuButton };
-            float[] yPositions = new float[] { 50f, -125f, -300f };
-
-            for (int i = 0; i < buttons.Length; i++)
-            {
-                if (buttons[i] == null) continue;
-                RectTransform rt = buttons[i].GetComponent<RectTransform>();
-                if (rt != null)
-                {
-                    rt.sizeDelta = new Vector2(280f, 150f);
-                    rt.anchoredPosition = new Vector2(0f, yPositions[i]);
-                }
-            }
-        }
-    }
-
-    /// <summary>
-    /// Updates button interactivity and dims the entire button visual (image + text) via CanvasGroup when disabled.
-    /// </summary>
-    private void SetButtonVisualInteractable(Button btn, bool interactable)
-    {
-        if (btn == null) return;
-        btn.interactable = interactable;
-
-        CanvasGroup cg = btn.GetComponent<CanvasGroup>();
-        if (cg == null)
-        {
-            cg = btn.gameObject.AddComponent<CanvasGroup>();
-        }
-        cg.alpha = interactable ? 1f : 0.6f;
     }
 
     /// <summary>
@@ -464,9 +408,7 @@ public class UIGameManager : MonoBehaviour
 
         if (coinsThisRunText != null)
         {
-            coinsThisRunText.text = coinsDoubledThisRun 
-                ? $"Coins: +{coinsThisRun * 2} (Doubled!)" 
-                : $"Coins: +{coinsThisRun}";
+            coinsThisRunText.text = $"Coins: +{coinsThisRun}";
         }
 
         if (SaveManager.instance != null)
@@ -474,125 +416,7 @@ public class UIGameManager : MonoBehaviour
             SaveManager.instance.Save();
         }
 
-        if (continueAdButton != null)
-        {
-            continueAdButton.gameObject.SetActive(!reviveUsedThisRun);
-        }
-
-        if (doubleCoinsButton != null)
-        {
-            doubleCoinsButton.gameObject.SetActive(true);
-            bool canDouble = !coinsDoubledThisRun && coinsThisRun > 0;
-            SetButtonVisualInteractable(doubleCoinsButton, canDouble);
-        }
-
         FormatDeadPanelButtons();
-    }
-
-    private void OnContinueAdClicked()
-    {
-        if (reviveUsedThisRun) return;
-
-        EnsureAdManager();
-        if (AdManager.instance != null)
-        {
-            AdManager.instance.ShowRewardedAd(OnReviveRewardEarned);
-        }
-    }
-
-    private void OnReviveRewardEarned()
-    {
-        reviveUsedThisRun = true;
-
-        if (ScoreManager.instance != null)
-        {
-            ScoreManager.instance.ResumeTracking();
-        }
-
-        PlayerMovement player = FindFirstObjectByType<PlayerMovement>();
-        if (player != null)
-        {
-            float targetCamY = CameraController.instance != null
-                ? CameraController.instance.HighestCameraY
-                : (Camera.main != null ? Camera.main.transform.position.y : 0f);
-
-            float posX = Mathf.Clamp(player.transform.position.x, -1.8f, 1.8f);
-            Vector3 platformPos = new Vector3(posX, targetCamY - 2.2f, 0f);
-
-            GameObject safetyPlatform = null;
-            if (platformPrefab != null)
-            {
-                if (GroundManager.instance != null)
-                {
-                    safetyPlatform = GroundManager.instance.SpawnPlatform(platformPrefab, platformPos, Quaternion.identity);
-                }
-                else
-                {
-                    safetyPlatform = Instantiate(platformPrefab, platformPos, Quaternion.identity);
-                }
-            }
-
-            if (safetyPlatform != null)
-            {
-                FloorScript fs = safetyPlatform.GetComponent<FloorScript>();
-                if (fs != null)
-                {
-                    fs.SetWidthScale(1.0f);
-                }
-            }
-
-            Vector3 revivePlayerPos = new Vector3(posX, targetCamY - 1.2f, 0f);
-            player.Revive(revivePlayerPos);
-        }
-
-        deadPannel.SetActive(false);
-        isGameOver = false;
-        if (pauseButton != null)
-        {
-            pauseButton.gameObject.SetActive(true);
-        }
-
-        if (GameManager.instance != null)
-        {
-            GameManager.instance.SetTime(1f);
-        }
-        else
-        {
-            Time.timeScale = 1f;
-        }
-    }
-
-    private void OnDoubleCoinsClicked()
-    {
-        if (coinsDoubledThisRun || coinsThisRun <= 0) return;
-
-        EnsureAdManager();
-        if (AdManager.instance != null)
-        {
-            AdManager.instance.ShowRewardedAd(OnDoubleCoinsRewardEarned);
-        }
-    }
-
-    private void OnDoubleCoinsRewardEarned()
-    {
-        coinsDoubledThisRun = true;
-
-        if (TransferManager.instance != null)
-        {
-            TransferManager.instance.AddCoins(coinsThisRun);
-        }
-
-        if (coinsThisRunText != null)
-        {
-            coinsThisRunText.text = $"Coins: +{coinsThisRun * 2} (Doubled!)";
-        }
-
-        if (doubleCoinsButton != null)
-        {
-            SetButtonVisualInteractable(doubleCoinsButton, false);
-        }
-
-        UpdateNumber();
     }
 
     private void EnsureAudioManager()
@@ -601,15 +425,6 @@ public class UIGameManager : MonoBehaviour
         {
             GameObject audioGo = new GameObject("AudioManager");
             audioGo.AddComponent<AudioManager>();
-        }
-    }
-
-    private void EnsureAdManager()
-    {
-        if (AdManager.instance == null)
-        {
-            GameObject adGo = new GameObject("AdManager");
-            adGo.AddComponent<AdManager>();
         }
     }
 
